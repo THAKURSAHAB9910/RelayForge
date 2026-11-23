@@ -186,8 +186,8 @@ The benchmarks below were measured on the C++ engine core running natively in an
 
 ### 5.2 Building from Source
 ```bash
-git clone https://github.com/your-org/relayforge.git
-cd relayforge
+git clone https://github.com/THAKURSAHAB9910/RelayForge.git
+cd RelayForge
 
 # Configure and compile
 mkdir -p build && cd build
