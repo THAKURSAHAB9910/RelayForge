@@ -1,10 +1,12 @@
 # RelayForge — Fault-Tolerant Event Processing Engine
 
-[![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://en.cppreference.com/w/cpp/20)
-[![CMake](https://img.shields.io/badge/CMake-3.20%2B-brightgreen.svg)](https://cmake.org)
-[![Storage](https://img.shields.io/badge/Storage-SQLite%20WAL-orange.svg)](https://sqlite.org/wal.html)
-[![Metrics](https://img.shields.io/badge/Observability-Prometheus-red.svg)](https://prometheus.io)
-[![License](https://img.shields.io/badge/License-Apache%202.0-lightgrey.svg)](LICENSE)
+[![Live Dashboard](https://img.shields.io/badge/Live%20Dashboard-GitHub%20Pages-22c55e?style=flat-square&logo=github)](https://thakursahab9910.github.io/RelayForge/)
+[![Deploy with Vercel](https://img.shields.io/badge/Deploy%20with-Vercel-000000?style=flat-square&logo=vercel)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FTHAKURSAHAB9910%2FRelayForge)
+[![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg?style=flat-square)](https://en.cppreference.com/w/cpp/20)
+[![CMake](https://img.shields.io/badge/CMake-3.20%2B-brightgreen.svg?style=flat-square)](https://cmake.org)
+[![Storage](https://img.shields.io/badge/Storage-SQLite%20WAL-orange.svg?style=flat-square)](https://sqlite.org/wal.html)
+[![Metrics](https://img.shields.io/badge/Observability-Prometheus-red.svg?style=flat-square)](https://prometheus.io)
+[![License](https://img.shields.io/badge/License-Apache%202.0-lightgrey.svg?style=flat-square)](LICENSE)
 
 **RelayForge** is an industrial-grade, fault-tolerant event processing engine engineered in modern **C++20**. It is built from the ground up to solve the core reliability failure modes that plague modern microservices and high-throughput background systems:
 
@@ -13,6 +15,40 @@
 3. **Host & Application Crashes**: Prevented from causing event loss by persisting state to **SQLite Write-Ahead Logging (WAL)** prior to network acknowledgment.
 4. **Traffic Surges & Upstream Saturation**: Controlled via Token Bucket rate limiting and bounded priority queue backpressure.
 5. **Thundering Herd Retries**: Prevented using Exponential Backoff with randomized **Full Jitter**.
+
+---
+
+## 🌐 Live Interactive Dashboard
+
+RelayForge features a real-time, responsive monitoring and simulation dashboard built with Tailwind CSS, Chart.js, and Lucide Icons.
+
+### 👉 **[Open Live Dashboard on GitHub Pages](https://thakursahab9910.github.io/RelayForge/)**
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FTHAKURSAHAB9910%2FRelayForge)
+
+### Dashboard Highlights:
+- **Real-Time Telemetry**: Real-time throughput (eps), $p50/p95/p99$ processing latencies, active worker pool utilization, queue depths, and failure counters.
+- **Dual-Mode Architecture**:
+  - **Live Production Mode**: Seamlessly auto-connects to the local RelayForge C++ engine (`http://localhost:8080`) with full CORS support.
+  - **Interactive Simulation Mode**: When disconnected, runs an in-browser virtual engine reproducing priority scheduling, Full Jitter backoff, and DLQ quarantine.
+- **Interactive Event Dispatcher**:
+  - `⚡ Order Event`: High-priority e-commerce ingestion.
+  - `💳 Payment Event`: Critical-priority financial transaction.
+  - `📦 Inventory Reserve`: Normal-priority warehouse allocation.
+  - `🔔 Notification`: Low-priority outbound communication.
+  - `⚠️ Simulate Failure`: Triggers exponential backoff with randomized Full Jitter.
+  - `☠️ Poison Pill`: Intentionally exhausts max retries to test Dead Letter Queue (DLQ) quarantine.
+  - `🌊 Traffic Surge Generator`: Dispatches 25, 100, or 500 concurrent events in bursts.
+- **Dead Letter Queue (DLQ) Manager**: Inspect quarantined poison pills, view stack traces and failure reasons, and perform **1-click administrative replay**.
+- **Prometheus Exporter**: Live preview of the raw `/metrics` Prometheus exposition text format.
+
+```bash
+# Access locally when running native C++ server:
+http://localhost:8080/dashboard
+
+# Or when running FastAPI gateway:
+http://localhost:8000/dashboard
+```
 
 ---
 

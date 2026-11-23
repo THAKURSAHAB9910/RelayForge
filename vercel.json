@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "name": "relayforge-dashboard",
+  "cleanUrls": true,
+  "routes": [
+    {
+      "src": "/dashboard/(.*)",
+      "dest": "/dashboard/$1"
+    },
+    {
+      "src": "/dashboard",
+      "dest": "/dashboard/index.html"
+    },
+    {
+      "src": "/",
+      "dest": "/dashboard/index.html"
+    }
+  ]
+}

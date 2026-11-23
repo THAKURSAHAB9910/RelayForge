@@ -3,7 +3,8 @@ import sys
 import httpx
 from typing import Optional, Dict, Any, List
 from fastapi import FastAPI, HTTPException, Query, status
-from fastapi.responses import PlainTextResponse, JSONResponse
+from fastapi.responses import PlainTextResponse, JSONResponse, FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 BACKEND_URL = os.getenv("RELAYFORGE_BACKEND_URL", "http://127.0.0.1:8080")
@@ -13,6 +14,23 @@ app = FastAPI(
     description="Production-grade fault-tolerant event processing engine REST gateway",
     version="1.0.0"
 )
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.get("/", summary="Live Dashboard", include_in_schema=False)
+@app.get("/dashboard", summary="Live Dashboard", include_in_schema=False)
+async def serve_dashboard():
+    dashboard_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dashboard", "index.html")
+    if os.path.exists(dashboard_path):
+        return FileResponse(dashboard_path)
+    return PlainTextResponse("RelayForge Live Dashboard not found at dashboard/index.html")
+
 
 class EventIngestRequest(BaseModel):
     event_type: str = Field(..., example="order.created")

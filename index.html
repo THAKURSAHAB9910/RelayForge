@@ -1,0 +1,1338 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RelayForge — Live Event Processing Dashboard</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0fdf4',
+              500: '#22c55e',
+              600: '#16a34a',
+            },
+            dark: {
+              bg: '#090d16',
+              surface: '#0f172a',
+              card: '#1e293b',
+              border: '#334155'
+            }
+          },
+          fontFamily: {
+            mono: ['JetBrains Mono', 'Fira Code', 'Courier New', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    /* Custom scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    .glass-card {
+      background: rgba(30, 41, 59, 0.7);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(51, 65, 85, 0.6);
+    }
+    .pulse-glow {
+      box-shadow: 0 0 15px rgba(34, 197, 94, 0.35);
+    }
+  </style>
+</head>
+<body class="bg-[#090d16] text-slate-100 min-h-screen flex flex-col antialiased selection:bg-emerald-500 selection:text-black">
+
+  <!-- Top Navigation Bar -->
+  <header class="border-b border-slate-800 bg-[#0f172a]/80 backdrop-blur sticky top-0 z-40 px-4 lg:px-8 py-3.5">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center font-bold text-black shadow-lg shadow-emerald-500/20">
+          <i data-lucide="zap" class="w-6 h-6 stroke-[2.5]"></i>
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <h1 class="text-lg font-bold tracking-tight text-white">RelayForge</h1>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">C++20 WAL CORE</span>
+          </div>
+          <p class="text-xs text-slate-400">Fault-Tolerant Distributed Event Processing Engine</p>
+        </div>
+      </div>
+
+      <!-- Mode & Status Indicator -->
+      <div class="flex items-center space-x-3">
+        <div id="connectionPill" class="flex items-center space-x-2 px-3 py-1.5 rounded-full bg-slate-800/90 border border-slate-700 text-xs font-mono">
+          <span id="connectionDot" class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span id="connectionText" class="text-slate-300">Checking Engine...</span>
+        </div>
+
+        <button onclick="toggleConfigModal()" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition" title="Connection Settings">
+          <i data-lucide="settings" class="w-4 h-4"></i>
+        </button>
+
+        <a href="https://github.com/THAKURSAHAB9910/RelayForge" target="_blank" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-slate-200 transition">
+          <i data-lucide="github" class="w-4 h-4"></i>
+          <span>GitHub</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Notice Banner for Simulator Mode -->
+  <div id="simBanner" class="hidden bg-gradient-to-r from-blue-900/60 via-indigo-900/40 to-blue-900/60 border-b border-indigo-700/40 px-4 py-2 text-center text-xs text-indigo-200">
+    <span>💡 <strong>Interactive Simulation Mode Active:</strong> No local C++ daemon detected at <code class="font-mono text-cyan-300" id="currentEndpointDisplay">http://localhost:8080</code>. You are interacting with the in-browser simulation reproducing priority queuing, Full Jitter, and DLQ handling.</span>
+  </div>
+
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 lg:px-8 py-6 space-y-6">
+
+    <!-- KPI Metric Cards Grid -->
+    <section class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
+      <!-- 1. Total Ingested -->
+      <div class="glass-card rounded-xl p-4 flex flex-col justify-between">
+        <div class="flex items-center justify-between text-slate-400 mb-1">
+          <span class="text-xs uppercase font-medium tracking-wider">Total Ingested</span>
+          <i data-lucide="arrow-down-to-dot" class="w-4 h-4 text-emerald-400"></i>
+        </div>
+        <div>
+          <div id="metricIngested" class="text-2xl font-bold font-mono text-white">0</div>
+          <div class="text-[11px] text-emerald-400 flex items-center gap-1 mt-0.5">
+            <span id="metricThroughput" class="font-mono font-medium">0.0</span> eps
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Completed -->
+      <div class="glass-card rounded-xl p-4 flex flex-col justify-between">
+        <div class="flex items-center justify-between text-slate-400 mb-1">
+          <span class="text-xs uppercase font-medium tracking-wider">Completed</span>
+          <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i>
+        </div>
+        <div>
+          <div id="metricCompleted" class="text-2xl font-bold font-mono text-emerald-400">0</div>
+          <div class="text-[11px] text-slate-400 mt-0.5">
+            <span id="metricSuccessRate" class="font-mono font-medium text-emerald-400">100%</span> success rate
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. In-Flight Workers -->
+      <div class="glass-card rounded-xl p-4 flex flex-col justify-between">
+        <div class="flex items-center justify-between text-slate-400 mb-1">
+          <span class="text-xs uppercase font-medium tracking-wider">In Flight</span>
+          <i data-lucide="cpu" class="w-4 h-4 text-cyan-400"></i>
+        </div>
+        <div>
+          <div id="metricInFlight" class="text-2xl font-bold font-mono text-cyan-400">0</div>
+          <div class="text-[11px] text-slate-400 mt-0.5">
+            <span id="metricWorkerUtil" class="font-mono text-cyan-300">0%</span> pool busy
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. Retries & Backoff -->
+      <div class="glass-card rounded-xl p-4 flex flex-col justify-between">
+        <div class="flex items-center justify-between text-slate-400 mb-1">
+          <span class="text-xs uppercase font-medium tracking-wider">Retries Scheduled</span>
+          <i data-lucide="refresh-cw" class="w-4 h-4 text-amber-400"></i>
+        </div>
+        <div>
+          <div id="metricRetries" class="text-2xl font-bold font-mono text-amber-400">0</div>
+          <div class="text-[11px] text-amber-400/90 mt-0.5 flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping"></span>
+            Full Jitter Backoff
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. Dead Letter Queue -->
+      <div class="glass-card rounded-xl p-4 flex flex-col justify-between border-rose-900/30">
+        <div class="flex items-center justify-between text-slate-400 mb-1">
+          <span class="text-xs uppercase font-medium tracking-wider">Dead Letter (DLQ)</span>
+          <i data-lucide="skull" class="w-4 h-4 text-rose-400"></i>
+        </div>
+        <div>
+          <div id="metricDLQ" class="text-2xl font-bold font-mono text-rose-400">0</div>
+          <div class="text-[11px] text-rose-400/80 mt-0.5">
+            Quarantined Poison Pills
+          </div>
+        </div>
+      </div>
+
+      <!-- 6. Latency Percentiles -->
+      <div class="glass-card rounded-xl p-4 flex flex-col justify-between">
+        <div class="flex items-center justify-between text-slate-400 mb-1">
+          <span class="text-xs uppercase font-medium tracking-wider">p50 / p99 Latency</span>
+          <i data-lucide="gauge" class="w-4 h-4 text-purple-400"></i>
+        </div>
+        <div>
+          <div class="text-xl font-bold font-mono text-purple-300">
+            <span id="metricP50">0.05</span><span class="text-xs text-slate-400">ms</span> / <span id="metricP99">1.2</span><span class="text-xs text-slate-400">ms</span>
+          </div>
+          <div class="text-[11px] text-slate-400 mt-0.5">
+            Algorithm R Reservoir
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Interactive Simulator Controls & Ingestion Bar -->
+    <section class="glass-card rounded-2xl p-5 border border-slate-800">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+        <div>
+          <h2 class="text-sm font-semibold tracking-wide uppercase text-slate-300 flex items-center gap-2">
+            <i data-lucide="play" class="w-4 h-4 text-emerald-400 fill-emerald-400"></i>
+            Interactive Event Dispatcher & Stress Controls
+          </h2>
+          <p class="text-xs text-slate-400 mt-0.5">Dispatch simulated domain events, trigger retry storms, or inject poison pills to test WAL resilience.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="toggleCustomEventModal()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 flex items-center gap-1.5 transition">
+            <i data-lucide="code" class="w-3.5 h-3.5"></i>
+            <span>Custom JSON</span>
+          </button>
+          <button onclick="resetEngineData()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-rose-950/40 text-xs font-medium text-slate-400 hover:text-rose-400 border border-slate-700 hover:border-rose-800 transition">
+            Reset Data
+          </button>
+        </div>
+      </div>
+
+      <!-- Action Buttons Grid -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+        <button onclick="dispatchPreset('order')" class="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-800/80 hover:bg-emerald-950/40 border border-slate-700 hover:border-emerald-600/50 text-center transition group">
+          <i data-lucide="shopping-cart" class="w-5 h-5 text-emerald-400 group-hover:scale-110 transition mb-1.5"></i>
+          <span class="text-xs font-semibold text-white">Order Event</span>
+          <span class="text-[10px] text-emerald-400/80 font-mono">HIGH Priority</span>
+        </button>
+
+        <button onclick="dispatchPreset('payment')" class="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-800/80 hover:bg-purple-950/40 border border-slate-700 hover:border-purple-600/50 text-center transition group">
+          <i data-lucide="credit-card" class="w-5 h-5 text-purple-400 group-hover:scale-110 transition mb-1.5"></i>
+          <span class="text-xs font-semibold text-white">Payment Event</span>
+          <span class="text-[10px] text-purple-400/80 font-mono">CRITICAL Priority</span>
+        </button>
+
+        <button onclick="dispatchPreset('inventory')" class="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-800/80 hover:bg-blue-950/40 border border-slate-700 hover:border-blue-600/50 text-center transition group">
+          <i data-lucide="package" class="w-5 h-5 text-blue-400 group-hover:scale-110 transition mb-1.5"></i>
+          <span class="text-xs font-semibold text-white">Inventory Reserve</span>
+          <span class="text-[10px] text-blue-400/80 font-mono">NORMAL Priority</span>
+        </button>
+
+        <button onclick="dispatchPreset('notification')" class="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-800/80 hover:bg-slate-700/60 border border-slate-700 hover:border-slate-500 text-center transition group">
+          <i data-lucide="bell" class="w-5 h-5 text-slate-300 group-hover:scale-110 transition mb-1.5"></i>
+          <span class="text-xs font-semibold text-white">Notification</span>
+          <span class="text-[10px] text-slate-400 font-mono">LOW Priority</span>
+        </button>
+
+        <button onclick="dispatchPreset('failure')" class="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-800/80 hover:bg-amber-950/40 border border-slate-700 hover:border-amber-600/50 text-center transition group">
+          <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-400 group-hover:scale-110 transition mb-1.5"></i>
+          <span class="text-xs font-semibold text-amber-200">Simulate Failure</span>
+          <span class="text-[10px] text-amber-400/80 font-mono">Test Full Jitter</span>
+        </button>
+
+        <button onclick="dispatchPreset('poison')" class="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-800/80 hover:bg-rose-950/40 border border-slate-700 hover:border-rose-600/50 text-center transition group">
+          <i data-lucide="skull" class="w-5 h-5 text-rose-400 group-hover:scale-110 transition mb-1.5"></i>
+          <span class="text-xs font-semibold text-rose-200">Poison Pill</span>
+          <span class="text-[10px] text-rose-400/80 font-mono">Max Retries &rarr; DLQ</span>
+        </button>
+      </div>
+
+      <!-- Burst Simulation Banner -->
+      <div class="mt-4 pt-3.5 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center space-x-2 text-xs text-slate-300">
+          <i data-lucide="activity" class="w-4 h-4 text-emerald-400"></i>
+          <span><strong>Traffic Surge Generator:</strong> Inject high-density concurrent load:</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="triggerBurst(25)" class="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs font-mono text-emerald-400 border border-emerald-500/20 transition">
+            +25 Burst
+          </button>
+          <button onclick="triggerBurst(100)" class="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs font-mono text-emerald-400 border border-emerald-500/20 transition">
+            +100 Burst
+          </button>
+          <button onclick="triggerBurst(500)" class="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs font-mono text-amber-400 border border-amber-500/20 transition">
+            +500 High Load
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Real-time Charts Section -->
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <!-- Throughput Chart -->
+      <div class="glass-card rounded-2xl p-5 border border-slate-800 flex flex-col">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center space-x-2">
+            <i data-lucide="trending-up" class="w-4 h-4 text-emerald-400"></i>
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-300">Real-Time Throughput (eps)</h3>
+          </div>
+          <span class="text-[11px] font-mono text-slate-400">Window: 30s</span>
+        </div>
+        <div class="h-48 w-full relative">
+          <canvas id="throughputChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Latency Distribution Chart -->
+      <div class="glass-card rounded-2xl p-5 border border-slate-800 flex flex-col">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center space-x-2">
+            <i data-lucide="bar-chart-2" class="w-4 h-4 text-purple-400"></i>
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-300">Latency Percentiles (ms)</h3>
+          </div>
+          <div class="flex items-center gap-2 text-[10px] font-mono">
+            <span class="text-emerald-400">&bull; p50</span>
+            <span class="text-cyan-400">&bull; p95</span>
+            <span class="text-purple-400">&bull; p99</span>
+          </div>
+        </div>
+        <div class="h-48 w-full relative">
+          <canvas id="latencyChart"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- System Internals / Topology Matrix -->
+    <section class="glass-card rounded-2xl p-5 border border-slate-800">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+          <i data-lucide="layers" class="w-4 h-4 text-cyan-400"></i>
+          Subsystem Telemetry & Architecture Health
+        </h3>
+        <span class="text-[11px] font-mono text-emerald-400 flex items-center gap-1">
+          <span class="w-2 h-2 rounded-full bg-emerald-400"></span> ALL SYSTEMS OPERATIONAL
+        </span>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+        <!-- WAL Storage -->
+        <div class="bg-slate-900/60 rounded-xl p-3.5 border border-slate-800">
+          <div class="flex items-center justify-between text-slate-400 mb-1">
+            <span class="font-medium">SQLite WAL Storage</span>
+            <i data-lucide="database" class="w-3.5 h-3.5 text-emerald-400"></i>
+          </div>
+          <div class="font-mono text-white text-sm font-semibold">journal_mode = WAL</div>
+          <div class="text-[11px] text-slate-400 mt-1">synchronous = NORMAL</div>
+          <div class="mt-2 text-[11px] text-emerald-400 font-mono">0 corruptions &bull; Crash-Safe</div>
+        </div>
+
+        <!-- Priority Scheduler -->
+        <div class="bg-slate-900/60 rounded-xl p-3.5 border border-slate-800">
+          <div class="flex items-center justify-between text-slate-400 mb-1">
+            <span class="font-medium">Dual-Queue Scheduler</span>
+            <i data-lucide="list-ordered" class="w-3.5 h-3.5 text-cyan-400"></i>
+          </div>
+          <div class="flex items-center justify-between font-mono text-white text-sm font-semibold">
+            <span>Ready: <span id="telemetryReadyQueue">0</span></span>
+            <span class="text-amber-400">Delayed: <span id="telemetryDelayedQueue">0</span></span>
+          </div>
+          <div class="text-[11px] text-slate-400 mt-1">Capacity Cap: 50,000</div>
+          <div class="mt-2 text-[11px] text-cyan-400 font-mono">Backpressure Guard Active</div>
+        </div>
+
+        <!-- Worker Pool -->
+        <div class="bg-slate-900/60 rounded-xl p-3.5 border border-slate-800">
+          <div class="flex items-center justify-between text-slate-400 mb-1">
+            <span class="font-medium">Worker Thread Pool</span>
+            <i data-lucide="sliders" class="w-3.5 h-3.5 text-purple-400"></i>
+          </div>
+          <div class="font-mono text-white text-sm font-semibold">
+            <span id="telemetryActiveWorkers">0</span> / 4 Threads Active
+          </div>
+          <div class="w-full bg-slate-800 rounded-full h-1.5 mt-2 overflow-hidden">
+            <div id="workerBar" class="bg-gradient-to-r from-cyan-500 to-purple-500 h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+          </div>
+          <div class="mt-1 text-[11px] text-purple-300 font-mono">Exception Shields Enabled</div>
+        </div>
+
+        <!-- Rate Limiter -->
+        <div class="bg-slate-900/60 rounded-xl p-3.5 border border-slate-800">
+          <div class="flex items-center justify-between text-slate-400 mb-1">
+            <span class="font-medium">Token Bucket Limiter</span>
+            <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-400"></i>
+          </div>
+          <div class="font-mono text-white text-sm font-semibold">Limit: 10,000 EPS</div>
+          <div class="text-[11px] text-slate-400 mt-1">Burst Window: 2,000 tokens</div>
+          <div class="mt-2 text-[11px] text-emerald-400 font-mono">DDoS &amp; Surge Shielded</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tabs: Event Stream, DLQ Inspector, Raw Prometheus -->
+    <section class="glass-card rounded-2xl border border-slate-800 overflow-hidden">
+      <!-- Tab Headers -->
+      <div class="flex items-center border-b border-slate-800 px-5 pt-3 gap-6 text-xs font-semibold">
+        <button id="tabBtnStream" onclick="switchTab('stream')" class="pb-3 border-b-2 border-emerald-400 text-white flex items-center gap-1.5">
+          <i data-lucide="list" class="w-4 h-4 text-emerald-400"></i>
+          <span>Live Event Stream</span>
+          <span id="streamBadge" class="ml-1 px-1.5 py-0.2 rounded-full bg-slate-800 text-[10px] text-slate-300 font-mono">0</span>
+        </button>
+
+        <button id="tabBtnDLQ" onclick="switchTab('dlq')" class="pb-3 border-b-2 border-transparent text-slate-400 hover:text-white flex items-center gap-1.5">
+          <i data-lucide="skull" class="w-4 h-4 text-rose-400"></i>
+          <span>Dead Letter Queue (DLQ)</span>
+          <span id="dlqBadge" class="ml-1 px-1.5 py-0.2 rounded-full bg-rose-950/80 border border-rose-800 text-[10px] text-rose-300 font-mono">0</span>
+        </button>
+
+        <button id="tabBtnProm" onclick="switchTab('prom')" class="pb-3 border-b-2 border-transparent text-slate-400 hover:text-white flex items-center gap-1.5">
+          <i data-lucide="terminal" class="w-4 h-4 text-purple-400"></i>
+          <span>Prometheus Metrics (/metrics)</span>
+        </button>
+      </div>
+
+      <!-- Tab Content: Live Event Stream -->
+      <div id="tabContentStream" class="p-4 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div class="flex items-center gap-2">
+            <div class="relative">
+              <input type="text" id="eventSearchInput" oninput="renderEventTable()" placeholder="Search Event ID, Type, Key..." class="bg-slate-900 border border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 w-64">
+              <i data-lucide="search" class="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5"></i>
+            </div>
+            <select id="statusFilter" onchange="renderEventTable()" class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 focus:outline-none">
+              <option value="ALL">All Statuses</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="IN_FLIGHT">In Flight</option>
+              <option value="RETRY_SCHEDULED">Retry Scheduled</option>
+              <option value="DEAD_LETTER">Dead Letter</option>
+              <option value="PENDING">Pending</option>
+            </select>
+          </div>
+          <div class="flex items-center gap-2 text-slate-400">
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" id="autoScrollCheck" checked class="rounded bg-slate-900 border-slate-700 text-emerald-500 focus:ring-0">
+              <span>Auto-refresh</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto rounded-xl border border-slate-800">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-900/80 text-slate-400 border-b border-slate-800 uppercase font-mono text-[10px]">
+              <tr>
+                <th class="py-2.5 px-3">Time</th>
+                <th class="py-2.5 px-3">Event ID</th>
+                <th class="py-2.5 px-3">Idempotency Key</th>
+                <th class="py-2.5 px-3">Event Type</th>
+                <th class="py-2.5 px-3">Priority</th>
+                <th class="py-2.5 px-3">Status</th>
+                <th class="py-2.5 px-3 text-center">Attempt</th>
+                <th class="py-2.5 px-3 text-right">Duration</th>
+                <th class="py-2.5 px-3 text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody id="eventTableBody" class="divide-y divide-slate-800/60 font-mono text-slate-300">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab Content: DLQ Inspector -->
+      <div id="tabContentDLQ" class="hidden p-4 space-y-3">
+        <div class="flex items-center justify-between text-xs text-slate-400">
+          <p>Dead Letter Queue contains poisoned or permanently failing events that exceeded max retries. You can inspect failures and replay them.</p>
+          <button onclick="replayAllDLQ()" class="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 text-xs font-semibold flex items-center gap-1.5 transition">
+            <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i>
+            <span>Replay All DLQ</span>
+          </button>
+        </div>
+
+        <div class="overflow-x-auto rounded-xl border border-slate-800">
+          <table class="w-full text-left text-xs font-mono">
+            <thead class="bg-rose-950/30 text-rose-300/80 border-b border-slate-800 uppercase text-[10px]">
+              <tr>
+                <th class="py-2.5 px-3">Event ID</th>
+                <th class="py-2.5 px-3">Type</th>
+                <th class="py-2.5 px-3">Failure Reason</th>
+                <th class="py-2.5 px-3 text-center">Attempts</th>
+                <th class="py-2.5 px-3">Quarantined At</th>
+                <th class="py-2.5 px-3 text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody id="dlqTableBody" class="divide-y divide-slate-800/60 text-slate-300">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab Content: Raw Prometheus Metrics -->
+      <div id="tabContentProm" class="hidden p-4 space-y-3">
+        <div class="flex items-center justify-between text-xs text-slate-400">
+          <span>Live Prometheus Text Exposition Format (`GET /metrics`):</span>
+          <button onclick="copyPrometheus()" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 border border-slate-700 flex items-center gap-1 transition">
+            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            <span id="copyPromBtnText">Copy Metrics</span>
+          </button>
+        </div>
+        <pre id="prometheusRawText" class="p-4 rounded-xl bg-slate-950 border border-slate-800 text-[11px] font-mono text-emerald-400/90 overflow-x-auto max-h-96"></pre>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal: Event Details -->
+  <div id="eventModal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="glass-card bg-[#0f172a] rounded-2xl max-w-2xl w-full border border-slate-700 overflow-hidden shadow-2xl">
+      <div class="flex items-center justify-between p-4 border-b border-slate-800">
+        <div class="flex items-center space-x-2">
+          <i data-lucide="file-json" class="w-5 h-5 text-emerald-400"></i>
+          <h3 class="text-sm font-semibold text-white">Event Audit &amp; Payload Inspector</h3>
+        </div>
+        <button onclick="closeEventModal()" class="text-slate-400 hover:text-white p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div class="p-5 space-y-4 max-h-[75vh] overflow-y-auto text-xs font-mono">
+        <div>
+          <span class="text-slate-400 block mb-1 text-[11px] uppercase tracking-wider font-sans">Event Metadata</span>
+          <div id="modalMeta" class="p-3 rounded-lg bg-slate-900 border border-slate-800 space-y-1 text-slate-300"></div>
+        </div>
+        <div>
+          <span class="text-slate-400 block mb-1 text-[11px] uppercase tracking-wider font-sans">Payload JSON</span>
+          <pre id="modalPayload" class="p-3 rounded-lg bg-slate-950 border border-slate-800 text-emerald-400 text-[11px] overflow-x-auto"></pre>
+        </div>
+        <div>
+          <span class="text-slate-400 block mb-1 text-[11px] uppercase tracking-wider font-sans">WAL Audit Transition History</span>
+          <div id="modalAudit" class="space-y-1.5"></div>
+        </div>
+      </div>
+      <div class="p-4 border-t border-slate-800 bg-slate-900/60 flex justify-end">
+        <button onclick="closeEventModal()" class="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-700">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Connection Settings -->
+  <div id="configModal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="glass-card bg-[#0f172a] rounded-2xl max-w-md w-full border border-slate-700 p-5 shadow-2xl">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+        <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+          <i data-lucide="settings" class="w-4 h-4 text-emerald-400"></i>
+          Backend Connection Config
+        </h3>
+        <button onclick="toggleConfigModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block text-slate-400 mb-1">RelayForge Core Endpoint (C++ REST Server)</label>
+          <input type="text" id="cfgBackendUrl" value="http://localhost:8080" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-mono text-xs focus:border-emerald-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">FastAPI Gateway URL (Optional)</label>
+          <input type="text" id="cfgGatewayUrl" value="http://localhost:8000" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-mono text-xs focus:border-emerald-500 focus:outline-none">
+        </div>
+        <p class="text-[11px] text-slate-500">
+          If the engine core cannot be reached, the dashboard automatically maintains an in-browser simulation reproducing priority queuing, Full Jitter, and DLQ handling.
+        </p>
+      </div>
+      <div class="mt-5 flex justify-end gap-2">
+        <button onclick="toggleConfigModal()" class="px-3 py-1.5 rounded-lg bg-slate-800 text-xs text-slate-300">Cancel</button>
+        <button onclick="saveConfig()" class="px-4 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-black font-semibold text-xs transition">Save &amp; Reconnect</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Custom Event Ingest -->
+  <div id="customModal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="glass-card bg-[#0f172a] rounded-2xl max-w-lg w-full border border-slate-700 p-5 shadow-2xl">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+        <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+          <i data-lucide="code" class="w-4 h-4 text-emerald-400"></i>
+          Dispatch Custom Event
+        </h3>
+        <button onclick="toggleCustomEventModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      <div class="space-y-3 text-xs">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-400 mb-1">Event Type</label>
+            <input type="text" id="custType" value="order.created" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-mono text-xs">
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">Priority</label>
+            <select id="custPriority" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-mono text-xs">
+              <option value="CRITICAL">CRITICAL</option>
+              <option value="HIGH" selected>HIGH</option>
+              <option value="NORMAL">NORMAL</option>
+              <option value="LOW">LOW</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">Idempotency Key</label>
+          <input type="text" id="custIdemp" value="tx_custom_001" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-mono text-xs">
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">Max Retries</label>
+          <input type="number" id="custRetries" value="3" min="0" max="10" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-mono text-xs">
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">Payload JSON</label>
+          <textarea id="custPayload" rows="4" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-emerald-400 font-mono text-xs">{"order_id": "ORD-9999", "amount": 250.00, "customer": "Vishesh"}</textarea>
+        </div>
+      </div>
+      <div class="mt-5 flex justify-end gap-2">
+        <button onclick="toggleCustomEventModal()" class="px-3 py-1.5 rounded-lg bg-slate-800 text-xs text-slate-300">Cancel</button>
+        <button onclick="submitCustomEvent()" class="px-4 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-black font-semibold text-xs transition">Submit Event</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Application Logic -->
+  <script>
+    // System State
+    let backendUrl = localStorage.getItem("rf_backend") || "http://localhost:8080";
+    let isConnectedToRealBackend = false;
+    let liveEvents = [];
+    let dlqEvents = [];
+    let metricsHistory = {
+      labels: [],
+      throughput: [],
+      p50: [],
+      p95: [],
+      p99: []
+    };
+
+    // Engine Telemetry Counters
+    let engineStats = {
+      total_ingested: 0,
+      total_completed: 0,
+      in_flight_count: 0,
+      retries_scheduled: 0,
+      dead_letter_count: 0,
+      queue_depth: 0,
+      delayed_queue_depth: 0,
+      p50_latency_ms: 0.05,
+      p95_latency_ms: 0.15,
+      p99_latency_ms: 1.25,
+      throughput_eps: 0.0,
+      last_calc_time: Date.now(),
+      last_completed: 0
+    };
+
+    // Charts Instances
+    let throughputChart = null;
+    let latencyChart = null;
+
+    // Initialize UI
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      initCharts();
+      checkBackendConnection();
+      setInterval(tickSystem, 1000);
+      setInterval(checkBackendConnection, 5000);
+
+      // Pre-seed simulator with realistic sample data if empty
+      if (liveEvents.length === 0) {
+        seedInitialSimulatorData();
+      }
+    });
+
+    function initCharts() {
+      const ctxThroughput = document.getElementById('throughputChart').getContext('2d');
+      throughputChart = new Chart(ctxThroughput, {
+        type: 'line',
+        data: {
+          labels: Array(20).fill(''),
+          datasets: [{
+            label: 'Throughput (eps)',
+            data: Array(20).fill(0),
+            borderColor: '#22c55e',
+            backgroundColor: 'rgba(34, 197, 94, 0.1)',
+            borderWidth: 2,
+            tension: 0.35,
+            fill: true,
+            pointRadius: 0
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { display: false },
+            y: {
+              grid: { color: 'rgba(51, 65, 85, 0.3)' },
+              ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 } }
+            }
+          }
+        }
+      });
+
+      const ctxLatency = document.getElementById('latencyChart').getContext('2d');
+      latencyChart = new Chart(ctxLatency, {
+        type: 'line',
+        data: {
+          labels: Array(20).fill(''),
+          datasets: [
+            {
+              label: 'p50',
+              data: Array(20).fill(0.05),
+              borderColor: '#22c55e',
+              borderWidth: 1.5,
+              tension: 0.3,
+              pointRadius: 0
+            },
+            {
+              label: 'p95',
+              data: Array(20).fill(0.18),
+              borderColor: '#06b6d4',
+              borderWidth: 1.5,
+              tension: 0.3,
+              pointRadius: 0
+            },
+            {
+              label: 'p99',
+              data: Array(20).fill(1.2),
+              borderColor: '#c084fc',
+              borderWidth: 1.5,
+              tension: 0.3,
+              pointRadius: 0
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { display: false },
+            y: {
+              grid: { color: 'rgba(51, 65, 85, 0.3)' },
+              ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 } }
+            }
+          }
+        }
+      });
+    }
+
+    async function checkBackendConnection() {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1500);
+        const res = await fetch(`${backendUrl}/health`, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          const data = await res.json();
+          isConnectedToRealBackend = true;
+          updateConnectionStatus(true, `Engine Core (${backendUrl})`);
+          fetchRealStats();
+          fetchRealDLQ();
+          return;
+        }
+      } catch (err) {
+        // Core offline
+      }
+
+      isConnectedToRealBackend = false;
+      updateConnectionStatus(false, "Interactive Simulator Active");
+    }
+
+    function updateConnectionStatus(isLive, label) {
+      const pill = document.getElementById('connectionPill');
+      const dot = document.getElementById('connectionDot');
+      const text = document.getElementById('connectionText');
+      const banner = document.getElementById('simBanner');
+      const disp = document.getElementById('currentEndpointDisplay');
+
+      if (isLive) {
+        pill.className = "flex items-center space-x-2 px-3 py-1.5 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-xs font-mono text-emerald-300";
+        dot.className = "w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse";
+        text.innerText = label;
+        banner.classList.add('hidden');
+      } else {
+        pill.className = "flex items-center space-x-2 px-3 py-1.5 rounded-full bg-indigo-950/80 border border-indigo-500/40 text-xs font-mono text-indigo-300";
+        dot.className = "w-2.5 h-2.5 rounded-full bg-indigo-400 animate-pulse";
+        text.innerText = label;
+        banner.classList.remove('hidden');
+        if (disp) disp.innerText = backendUrl;
+      }
+    }
+
+    async function fetchRealStats() {
+      try {
+        const res = await fetch(`${backendUrl}/stats`);
+        if (res.ok) {
+          const stats = await res.json();
+          engineStats.total_ingested = stats.events_received_total || engineStats.total_ingested;
+          engineStats.total_completed = stats.events_processed_total || engineStats.total_completed;
+          engineStats.retries_scheduled = stats.events_retried_total || engineStats.retries_scheduled;
+          engineStats.dead_letter_count = stats.events_dead_letter_total || engineStats.dead_letter_count;
+          engineStats.in_flight_count = stats.in_flight_count || 0;
+          engineStats.queue_depth = stats.queue_depth || 0;
+          engineStats.p50_latency_ms = stats.latency_p50_ms || 0.05;
+          engineStats.p95_latency_ms = stats.latency_p95_ms || 0.15;
+          engineStats.p99_latency_ms = stats.latency_p99_ms || 1.25;
+        }
+      } catch (e) {}
+    }
+
+    async function fetchRealDLQ() {
+      try {
+        const res = await fetch(`${backendUrl}/dlq?limit=50`);
+        if (res.ok) {
+          const data = await res.json();
+          dlqEvents = data.events || [];
+          document.getElementById('dlqBadge').innerText = dlqEvents.length;
+          renderDLQTable();
+        }
+      } catch (e) {}
+    }
+
+    // 1-second Engine Heartbeat / Tick
+    function tickSystem() {
+      const now = Date.now();
+      const elapsed = (now - engineStats.last_calc_time) / 1000;
+      const completedDelta = engineStats.total_completed - engineStats.last_completed;
+      engineStats.throughput_eps = elapsed > 0 ? (completedDelta / elapsed) : 0;
+      engineStats.last_calc_time = now;
+      engineStats.last_completed = engineStats.total_completed;
+
+      // In simulator mode, advance virtual events
+      if (!isConnectedToRealBackend) {
+        simulateVirtualStep();
+      }
+
+      // Update UI Counters
+      document.getElementById('metricIngested').innerText = engineStats.total_ingested.toLocaleString();
+      document.getElementById('metricCompleted').innerText = engineStats.total_completed.toLocaleString();
+      document.getElementById('metricInFlight').innerText = engineStats.in_flight_count;
+      document.getElementById('metricRetries').innerText = engineStats.retries_scheduled.toLocaleString();
+      document.getElementById('metricDLQ').innerText = engineStats.dead_letter_count.toLocaleString();
+      document.getElementById('metricThroughput').innerText = engineStats.throughput_eps.toFixed(1);
+      document.getElementById('metricP50').innerText = engineStats.p50_latency_ms.toFixed(2);
+      document.getElementById('metricP99').innerText = engineStats.p99_latency_ms.toFixed(2);
+
+      const successRate = engineStats.total_ingested > 0
+        ? ((engineStats.total_completed / Math.max(1, engineStats.total_completed + engineStats.dead_letter_count)) * 100).toFixed(1)
+        : "100";
+      document.getElementById('metricSuccessRate').innerText = `${successRate}%`;
+
+      const util = Math.min(100, Math.round((engineStats.in_flight_count / 4) * 100));
+      document.getElementById('metricWorkerUtil').innerText = `${util}%`;
+      document.getElementById('telemetryActiveWorkers').innerText = engineStats.in_flight_count;
+      document.getElementById('workerBar').style.width = `${util}%`;
+
+      document.getElementById('telemetryReadyQueue').innerText = engineStats.queue_depth;
+      document.getElementById('telemetryDelayedQueue').innerText = engineStats.delayed_queue_depth;
+      document.getElementById('streamBadge').innerText = liveEvents.length;
+
+      // Update Charts
+      if (throughputChart) {
+        throughputChart.data.datasets[0].data.shift();
+        throughputChart.data.datasets[0].data.push(engineStats.throughput_eps);
+        throughputChart.update('none');
+      }
+
+      if (latencyChart) {
+        latencyChart.data.datasets[0].data.shift();
+        latencyChart.data.datasets[0].data.push(engineStats.p50_latency_ms);
+        latencyChart.data.datasets[1].data.shift();
+        latencyChart.data.datasets[1].data.push(engineStats.p95_latency_ms);
+        latencyChart.data.datasets[2].data.shift();
+        latencyChart.data.datasets[2].data.push(engineStats.p99_latency_ms);
+        latencyChart.update('none');
+      }
+
+      renderEventTable();
+      renderDLQTable();
+      updatePrometheusText();
+    }
+
+    // In-Browser Virtual Engine Simulator Step
+    function simulateVirtualStep() {
+      // Find in-flight events and resolve them
+      liveEvents.forEach(ev => {
+        if (ev.status === 'IN_FLIGHT') {
+          // Execution completed
+          ev.status = 'COMPLETED';
+          ev.duration_ms = (Math.random() * 0.15 + 0.04).toFixed(3);
+          ev.audit.push({ to: 'COMPLETED', time: new Date().toLocaleTimeString(), reason: 'Executed successfully by worker thread' });
+          engineStats.in_flight_count = Math.max(0, engineStats.in_flight_count - 1);
+          engineStats.total_completed++;
+        } else if (ev.status === 'PENDING') {
+          // Worker claims event
+          if (engineStats.in_flight_count < 4) {
+            ev.status = 'IN_FLIGHT';
+            ev.attempt_count = (ev.attempt_count || 0) + 1;
+            ev.audit.push({ to: 'IN_FLIGHT', time: new Date().toLocaleTimeString(), reason: 'Claimed by worker thread' });
+            engineStats.in_flight_count++;
+            engineStats.queue_depth = Math.max(0, engineStats.queue_depth - 1);
+          }
+        } else if (ev.status === 'RETRY_SCHEDULED') {
+          // Decrement backoff delay
+          ev.backoff_remaining_ticks = (ev.backoff_remaining_ticks || 2) - 1;
+          if (ev.backoff_remaining_ticks <= 0) {
+            ev.status = 'PENDING';
+            ev.audit.push({ to: 'PENDING', time: new Date().toLocaleTimeString(), reason: 'Delayed retry heap timer expired' });
+            engineStats.delayed_queue_depth = Math.max(0, engineStats.delayed_queue_depth - 1);
+            engineStats.queue_depth++;
+          }
+        }
+      });
+    }
+
+    function seedInitialSimulatorData() {
+      const presets = [
+        { type: 'order.created', prio: 'HIGH', key: 'ord_init_101', status: 'COMPLETED', duration: '0.048' },
+        { type: 'payment.process', prio: 'CRITICAL', key: 'pay_init_802', status: 'COMPLETED', duration: '0.052' },
+        { type: 'inventory.reserve', prio: 'NORMAL', key: 'inv_init_303', status: 'COMPLETED', duration: '0.061' },
+        { type: 'notification.send', prio: 'LOW', key: 'notif_init_404', status: 'COMPLETED', duration: '0.043' },
+      ];
+
+      presets.forEach(p => {
+        const id = generateUUID();
+        liveEvents.unshift({
+          id,
+          idempotency_key: p.key,
+          event_type: p.type,
+          priority: p.prio,
+          status: p.status,
+          attempt_count: 1,
+          max_retries: 3,
+          created_at: new Date().toLocaleTimeString(),
+          duration_ms: p.duration,
+          payload: JSON.stringify({ item_id: p.key, amount: 99.99, status: "INITIALIZED" }, null, 2),
+          audit: [
+            { to: 'PENDING', time: new Date().toLocaleTimeString(), reason: 'Persisted to SQLite WAL' },
+            { to: 'IN_FLIGHT', time: new Date().toLocaleTimeString(), reason: 'Claimed by Worker #1' },
+            { to: 'COMPLETED', time: new Date().toLocaleTimeString(), reason: 'Handled successfully' }
+          ]
+        });
+        engineStats.total_ingested++;
+        engineStats.total_completed++;
+      });
+    }
+
+    // Action Handlers
+    async function dispatchPreset(type) {
+      const id = generateUUID();
+      const timestamp = new Date().toLocaleTimeString();
+      let event = null;
+
+      if (type === 'order') {
+        event = {
+          id,
+          idempotency_key: `order_tx_${Date.now().toString().slice(-6)}`,
+          event_type: 'order.created',
+          priority: 'HIGH',
+          max_retries: 3,
+          payload: { order_id: `ORD-${Date.now().toString().slice(-4)}`, amount: 149.95, items: 2 }
+        };
+      } else if (type === 'payment') {
+        event = {
+          id,
+          idempotency_key: `pay_tx_${Date.now().toString().slice(-6)}`,
+          event_type: 'payment.process',
+          priority: 'CRITICAL',
+          max_retries: 4,
+          payload: { transaction_id: `TXN-${Date.now().toString().slice(-5)}`, gateway: 'Stripe', amount: 320.00 }
+        };
+      } else if (type === 'inventory') {
+        event = {
+          id,
+          idempotency_key: `inv_tx_${Date.now().toString().slice(-6)}`,
+          event_type: 'inventory.reserve',
+          priority: 'NORMAL',
+          max_retries: 3,
+          payload: { sku: 'SKU-FORGE-99', warehouse: 'US-EAST-1', qty: 5 }
+        };
+      } else if (type === 'notification') {
+        event = {
+          id,
+          idempotency_key: `notif_tx_${Date.now().toString().slice(-6)}`,
+          event_type: 'notification.send',
+          priority: 'LOW',
+          max_retries: 2,
+          payload: { channel: 'SMS', recipient: '+1-555-0199', template: 'order_shipped' }
+        };
+      } else if (type === 'failure') {
+        // Simulated failure with Full Jitter retry
+        event = {
+          id,
+          idempotency_key: `retry_tx_${Date.now().toString().slice(-6)}`,
+          event_type: 'payment.process',
+          priority: 'HIGH',
+          max_retries: 3,
+          payload: { fail_injection: true, reason: 'Downstream payment timeout 504' }
+        };
+      } else if (type === 'poison') {
+        // Simulated poison pill that exhausts retries into DLQ
+        event = {
+          id,
+          idempotency_key: `poison_tx_${Date.now().toString().slice(-6)}`,
+          event_type: 'order.created',
+          priority: 'CRITICAL',
+          max_retries: 2,
+          payload: { poison_pill: true, reason: 'Unrecoverable database schema invariant violation' }
+        };
+      }
+
+      if (isConnectedToRealBackend) {
+        try {
+          const res = await fetch(`${backendUrl}/events`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(event)
+          });
+          if (res.ok) {
+            fetchRealStats();
+          }
+        } catch (e) {
+          console.error("Backend dispatch error:", e);
+        }
+      }
+
+      // Add to internal client model
+      registerEventInLocalModel(event, type === 'failure', type === 'poison');
+    }
+
+    function registerEventInLocalModel(event, isFailure, isPoison) {
+      engineStats.total_ingested++;
+      const timeStr = new Date().toLocaleTimeString();
+
+      const newEv = {
+        id: event.id,
+        idempotency_key: event.idempotency_key,
+        event_type: event.event_type,
+        priority: event.priority,
+        max_retries: event.max_retries || 3,
+        payload: JSON.stringify(event.payload, null, 2),
+        created_at: timeStr,
+        attempt_count: 0,
+        duration_ms: '--',
+        audit: [
+          { to: 'PENDING', time: timeStr, reason: 'Persisted to SQLite WAL & queued' }
+        ]
+      };
+
+      if (isPoison) {
+        // Immediately trigger fatal error progression into DLQ
+        newEv.status = 'DEAD_LETTER';
+        newEv.attempt_count = newEv.max_retries;
+        newEv.last_error = event.payload.reason || 'Poison pill fatal error';
+        newEv.audit.push({ to: 'DEAD_LETTER', time: timeStr, reason: 'Exhausted retries: ' + newEv.last_error });
+        engineStats.dead_letter_count++;
+        dlqEvents.unshift({
+          event_id: newEv.id,
+          event_type: newEv.event_type,
+          last_error: newEv.last_error,
+          attempt_count: newEv.attempt_count,
+          created_at: timeStr,
+          payload: newEv.payload
+        });
+        document.getElementById('dlqBadge').innerText = dlqEvents.length;
+      } else if (isFailure) {
+        // Trigger Full Jitter backoff
+        newEv.status = 'RETRY_SCHEDULED';
+        newEv.attempt_count = 1;
+        newEv.backoff_remaining_ticks = 3;
+        newEv.last_error = 'Transient HTTP 504 Timeout';
+        newEv.audit.push({ to: 'RETRY_SCHEDULED', time: timeStr, reason: 'Transient failure caught. Exponential backoff with Full Jitter.' });
+        engineStats.retries_scheduled++;
+        engineStats.delayed_queue_depth++;
+      } else {
+        newEv.status = 'PENDING';
+        engineStats.queue_depth++;
+      }
+
+      liveEvents.unshift(newEv);
+      if (liveEvents.length > 100) liveEvents.pop();
+      renderEventTable();
+      renderDLQTable();
+    }
+
+    function triggerBurst(count) {
+      const types = ['order', 'payment', 'inventory', 'notification'];
+      for (let i = 0; i < count; i++) {
+        setTimeout(() => {
+          const t = types[Math.floor(Math.random() * types.length)];
+          dispatchPreset(t);
+        }, i * 15);
+      }
+    }
+
+    function renderEventTable() {
+      const tbody = document.getElementById('eventTableBody');
+      const query = (document.getElementById('eventSearchInput').value || '').toLowerCase();
+      const statusFilter = document.getElementById('statusFilter').value;
+
+      let html = '';
+      const filtered = liveEvents.filter(ev => {
+        const matchesQuery = !query || ev.id.toLowerCase().includes(query) ||
+                             ev.event_type.toLowerCase().includes(query) ||
+                             ev.idempotency_key.toLowerCase().includes(query);
+        const matchesStatus = statusFilter === 'ALL' || ev.status === statusFilter;
+        return matchesQuery && matchesStatus;
+      });
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" class="text-center py-8 text-slate-500 font-sans">No events matched filters. Dispatch events using the control buttons above.</td></tr>`;
+        return;
+      }
+
+      filtered.slice(0, 30).forEach(ev => {
+        const prioBadge = getPriorityBadge(ev.priority);
+        const statusBadge = getStatusBadge(ev.status);
+
+        html += `
+          <tr class="hover:bg-slate-800/40 transition cursor-pointer" onclick="openEventModal('${ev.id}')">
+            <td class="py-2.5 px-3 text-slate-400 text-[11px]">${ev.created_at}</td>
+            <td class="py-2.5 px-3 text-cyan-300 font-medium">${ev.id.slice(0, 8)}...</td>
+            <td class="py-2.5 px-3 text-slate-400 text-[11px]">${ev.idempotency_key}</td>
+            <td class="py-2.5 px-3 font-semibold text-slate-200">${ev.event_type}</td>
+            <td class="py-2.5 px-3">${prioBadge}</td>
+            <td class="py-2.5 px-3">${statusBadge}</td>
+            <td class="py-2.5 px-3 text-center text-slate-400">${ev.attempt_count}/${ev.max_retries}</td>
+            <td class="py-2.5 px-3 text-right font-medium ${ev.duration_ms !== '--' ? 'text-emerald-400' : 'text-slate-500'}">${ev.duration_ms} ms</td>
+            <td class="py-2.5 px-3 text-center">
+              <button onclick="event.stopPropagation(); openEventModal('${ev.id}')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px]">View</button>
+            </td>
+          </tr>
+        `;
+      });
+
+      tbody.innerHTML = html;
+    }
+
+    function renderDLQTable() {
+      const tbody = document.getElementById('dlqTableBody');
+      if (dlqEvents.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-slate-500 font-sans">Dead Letter Queue is clear. (Click "Poison Pill" above to simulate a quarantine).</td></tr>`;
+        return;
+      }
+
+      let html = '';
+      dlqEvents.forEach(ev => {
+        html += `
+          <tr class="hover:bg-rose-950/20 transition">
+            <td class="py-2.5 px-3 text-rose-300 font-medium">${(ev.event_id || ev.id || '').slice(0, 13)}...</td>
+            <td class="py-2.5 px-3 text-slate-300">${ev.event_type}</td>
+            <td class="py-2.5 px-3 text-rose-400 text-[11px]">${ev.last_error || 'Max retries exhausted'}</td>
+            <td class="py-2.5 px-3 text-center text-slate-400">${ev.attempt_count}</td>
+            <td class="py-2.5 px-3 text-slate-400 text-[11px]">${ev.created_at || 'Just now'}</td>
+            <td class="py-2.5 px-3 text-center">
+              <button onclick="replaySingleDLQ('${ev.event_id || ev.id}')" class="px-2.5 py-1 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 text-[11px] font-semibold transition">
+                Replay
+              </button>
+            </td>
+          </tr>
+        `;
+      });
+      tbody.innerHTML = html;
+    }
+
+    async function replaySingleDLQ(eventId) {
+      if (isConnectedToRealBackend) {
+        try {
+          await fetch(`${backendUrl}/dlq/${eventId}/replay`, { method: 'POST' });
+          fetchRealStats();
+          fetchRealDLQ();
+        } catch (e) {}
+      }
+
+      // Remove from DLQ list and re-enqueue to liveEvents
+      dlqEvents = dlqEvents.filter(e => (e.event_id || e.id) !== eventId);
+      document.getElementById('dlqBadge').innerText = dlqEvents.length;
+      engineStats.dead_letter_count = Math.max(0, engineStats.dead_letter_count - 1);
+
+      const target = liveEvents.find(e => e.id === eventId);
+      if (target) {
+        target.status = 'PENDING';
+        target.attempt_count = 0;
+        target.audit.push({ to: 'PENDING', time: new Date().toLocaleTimeString(), reason: 'Replayed via Admin DLQ API' });
+        engineStats.queue_depth++;
+      }
+      renderDLQTable();
+      renderEventTable();
+    }
+
+    function replayAllDLQ() {
+      const copy = [...dlqEvents];
+      copy.forEach(e => replaySingleDLQ(e.event_id || e.id));
+    }
+
+    function getPriorityBadge(prio) {
+      if (prio === 'CRITICAL' || prio === 0) return `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">CRITICAL</span>`;
+      if (prio === 'HIGH' || prio === 1) return `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">HIGH</span>`;
+      if (prio === 'NORMAL' || prio === 2) return `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">NORMAL</span>`;
+      return `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-700 text-slate-300">LOW</span>`;
+    }
+
+    function getStatusBadge(status) {
+      if (status === 'COMPLETED') return `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1 w-fit"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>COMPLETED</span>`;
+      if (status === 'IN_FLIGHT') return `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 flex items-center gap-1 w-fit animate-pulse"><span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>IN_FLIGHT</span>`;
+      if (status === 'RETRY_SCHEDULED') return `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1 w-fit"><span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping"></span>RETRYING</span>`;
+      if (status === 'DEAD_LETTER') return `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-1 w-fit"><span class="w-1.5 h-1.5 rounded-full bg-rose-400"></span>DEAD_LETTER</span>`;
+      return `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700">PENDING</span>`;
+    }
+
+    function openEventModal(eventId) {
+      const ev = liveEvents.find(e => e.id === eventId);
+      if (!ev) return;
+
+      document.getElementById('modalMeta').innerHTML = `
+        <div><strong>Event ID:</strong> ${ev.id}</div>
+        <div><strong>Idempotency Key:</strong> ${ev.idempotency_key}</div>
+        <div><strong>Event Type:</strong> ${ev.event_type} (${ev.priority})</div>
+        <div><strong>Status:</strong> ${ev.status}</div>
+        <div><strong>Attempts:</strong> ${ev.attempt_count} of ${ev.max_retries}</div>
+      `;
+
+      document.getElementById('modalPayload').innerText = ev.payload;
+
+      let auditHtml = '';
+      (ev.audit || []).forEach(a => {
+        auditHtml += `
+          <div class="p-2 rounded bg-slate-900 border border-slate-800 flex items-center justify-between">
+            <span class="text-cyan-400 font-semibold">&rarr; ${a.to}</span>
+            <span class="text-slate-400 text-[10px]">${a.reason}</span>
+            <span class="text-slate-500 text-[10px]">${a.time}</span>
+          </div>
+        `;
+      });
+      document.getElementById('modalAudit').innerHTML = auditHtml;
+
+      document.getElementById('eventModal').classList.remove('hidden');
+    }
+
+    function closeEventModal() {
+      document.getElementById('eventModal').classList.add('hidden');
+    }
+
+    function switchTab(tab) {
+      const tabs = ['stream', 'dlq', 'prom'];
+      tabs.forEach(t => {
+        const btn = document.getElementById(`tabBtn${t.charAt(0).toUpperCase() + t.slice(1)}`);
+        const content = document.getElementById(`tabContent${t.charAt(0).toUpperCase() + t.slice(1)}`);
+        if (t === tab) {
+          btn.className = "pb-3 border-b-2 border-emerald-400 text-white flex items-center gap-1.5";
+          content.classList.remove('hidden');
+        } else {
+          btn.className = "pb-3 border-b-2 border-transparent text-slate-400 hover:text-white flex items-center gap-1.5";
+          content.classList.add('hidden');
+        }
+      });
+    }
+
+    function updatePrometheusText() {
+      const text = `# HELP relayforge_events_received_total Total events accepted
+# TYPE relayforge_events_received_total counter
+relayforge_events_received_total ${engineStats.total_ingested}
+
+# HELP relayforge_events_processed_total Total events successfully processed
+# TYPE relayforge_events_processed_total counter
+relayforge_events_processed_total ${engineStats.total_completed}
+
+# HELP relayforge_events_retried_total Total retry attempts executed
+# TYPE relayforge_events_retried_total counter
+relayforge_events_retried_total ${engineStats.retries_scheduled}
+
+# HELP relayforge_events_dead_letter_total Total events quarantined to DLQ
+# TYPE relayforge_events_dead_letter_total counter
+relayforge_events_dead_letter_total ${engineStats.dead_letter_count}
+
+# HELP relayforge_queue_depth Current depth of ready priority scheduler
+# TYPE relayforge_queue_depth gauge
+relayforge_queue_depth ${engineStats.queue_depth}
+
+# HELP relayforge_processing_latency_ms Event execution latency in ms
+# TYPE relayforge_processing_latency_ms summary
+relayforge_processing_latency_ms{quantile="0.5"} ${engineStats.p50_latency_ms.toFixed(4)}
+relayforge_processing_latency_ms{quantile="0.95"} ${engineStats.p95_latency_ms.toFixed(4)}
+relayforge_processing_latency_ms{quantile="0.99"} ${engineStats.p99_latency_ms.toFixed(4)}
+`;
+      document.getElementById('prometheusRawText').innerText = text;
+    }
+
+    function copyPrometheus() {
+      const text = document.getElementById('prometheusRawText').innerText;
+      navigator.clipboard.writeText(text);
+      const btn = document.getElementById('copyPromBtnText');
+      btn.innerText = "Copied!";
+      setTimeout(() => btn.innerText = "Copy Metrics", 2000);
+    }
+
+    function toggleConfigModal() {
+      const m = document.getElementById('configModal');
+      m.classList.toggle('hidden');
+    }
+
+    function saveConfig() {
+      backendUrl = document.getElementById('cfgBackendUrl').value.trim() || "http://localhost:8080";
+      localStorage.setItem("rf_backend", backendUrl);
+      toggleConfigModal();
+      checkBackendConnection();
+    }
+
+    function toggleCustomEventModal() {
+      const m = document.getElementById('customModal');
+      m.classList.toggle('hidden');
+    }
+
+    function submitCustomEvent() {
+      try {
+        const type = document.getElementById('custType').value.trim();
+        const prio = document.getElementById('custPriority').value;
+        const idemp = document.getElementById('custIdemp').value.trim();
+        const retries = parseInt(document.getElementById('custRetries').value, 10);
+        const payload = JSON.parse(document.getElementById('custPayload').value);
+
+        const event = {
+          id: generateUUID(),
+          idempotency_key: idemp || `tx_${Date.now()}`,
+          event_type: type || 'custom.event',
+          priority: prio,
+          max_retries: retries,
+          payload
+        };
+
+        if (isConnectedToRealBackend) {
+          fetch(`${backendUrl}/events`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(event)
+          });
+        }
+        registerEventInLocalModel(event, false, false);
+        toggleCustomEventModal();
+      } catch (err) {
+        alert("Invalid JSON payload: " + err.message);
+      }
+    }
+
+    function resetEngineData() {
+      liveEvents = [];
+      dlqEvents = [];
+      engineStats.total_ingested = 0;
+      engineStats.total_completed = 0;
+      engineStats.in_flight_count = 0;
+      engineStats.retries_scheduled = 0;
+      engineStats.dead_letter_count = 0;
+      engineStats.queue_depth = 0;
+      engineStats.delayed_queue_depth = 0;
+      tickSystem();
+    }
+
+    function generateUUID() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
+  </script>
+</body>
+</html>

@@ -102,3 +102,11 @@ flowchart TD
   - Events left in `IN_FLIGHT` from an abrupt termination (e.g., `SIGKILL`, power failure) are identified.
   - Attempt counts are incremented. If an event repeatedly causes process termination, it is quarantined to `DEAD_LETTER` as a poison pill.
   - Recoverable events are placed back into the scheduler.
+
+### 3.7 Live Monitoring Dashboard & Simulation UI
+- **Dual-Mode Telemetry Frontend**:
+  - Built with modern Tailwind CSS, Chart.js, and Lucide icons with zero external framework build dependencies.
+  - Serves directly from the native C++ server (`/dashboard`), FastAPI gateway (`/dashboard`), GitHub Pages (`https://thakursahab9910.github.io/RelayForge/`), or Vercel (`vercel.json`).
+  - **Live Production Mode**: Connects directly to `relayforge_server` REST endpoints (`/stats`, `/metrics`, `/events`, `/dlq`) using CORS pre-routing headers.
+  - **Interactive In-Browser Simulation**: When disconnected from the local engine, the dashboard seamlessly activates a real-time virtual simulation mimicking priority scheduling, Full Jitter backoff, and DLQ quarantine.
+  - **Administrative Controls**: Includes a 1-click Dead Letter Queue inspector and re-enqueuing mechanism via `POST /dlq/:id/replay`, custom JSON payload dispatcher, and high-density burst traffic generator.

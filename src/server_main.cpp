@@ -1,6 +1,8 @@
 #include "relayforge/engine.hpp"
 #include <httplib.h>
 #include <iostream>
+#include <fstream>
+#include <sstream>
 #include <csignal>
 #include <atomic>
 
@@ -65,6 +67,34 @@ int main(int argc, char* argv[]) {
     }
 
     auto server = std::make_unique<httplib::Server>();
+
+    // Global CORS Pre-Routing Handler
+    server->set_pre_routing_handler([](const httplib::Request& req, httplib::Response& res) {
+        res.set_header("Access-Control-Allow-Origin", "*");
+        res.set_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+        res.set_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+        if (req.method == "OPTIONS") {
+            res.status = 204;
+            return httplib::Server::HandlerResponse::Handled;
+        }
+        return httplib::Server::HandlerResponse::Unhandled;
+    });
+
+    // Live Dashboard endpoints
+    auto serve_dashboard = [](const httplib::Request&, httplib::Response& res) {
+        std::ifstream file("dashboard/index.html");
+        if (file.is_open()) {
+            std::stringstream buffer;
+            buffer << file.rdbuf();
+            res.status = 200;
+            res.set_content(buffer.str(), "text/html; charset=utf-8");
+        } else {
+            res.status = 200;
+            res.set_content("RelayForge C++ Engine Core UP. (Dashboard located at dashboard/index.html)", "text/plain");
+        }
+    };
+    server->Get("/", serve_dashboard);
+    server->Get("/dashboard", serve_dashboard);
 
     // 1. POST /events
     server->Post("/events", [&engine](const httplib::Request& req, httplib::Response& res) {
