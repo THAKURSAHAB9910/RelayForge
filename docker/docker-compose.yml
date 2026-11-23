@@ -1,0 +1,46 @@
+services:
+  relayforge:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: relayforge-core
+    ports:
+      - "8080:8080"
+    volumes:
+      - relayforge_data:/data
+    command: ["--port", "8080", "--db", "/data/relayforge.db", "--workers", "4", "--max-queue", "50000"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  fastapi-gateway:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    container_name: relayforge-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - RELAYFORGE_BACKEND_URL=http://relayforge:8080
+      - PORT=8000
+    depends_on:
+      relayforge:
+        condition: service_healthy
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: relayforge-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - relayforge
+    restart: unless-stopped
+
+volumes:
+  relayforge_data:
