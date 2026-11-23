@@ -2,6 +2,7 @@ import os
 import sys
 import httpx
 from typing import Optional, Dict, Any, List
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query, status
 from fastapi.responses import PlainTextResponse, JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,10 +10,24 @@ from pydantic import BaseModel, Field
 
 BACKEND_URL = os.getenv("RELAYFORGE_BACKEND_URL", "http://127.0.0.1:8080")
 
+# Connection pool for high-throughput gateway proxying
+http_client: Optional[httpx.AsyncClient] = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global http_client
+    limits = httpx.Limits(max_keepalive_connections=30, max_connections=100)
+    timeout = httpx.Timeout(5.0, connect=2.0)
+    http_client = httpx.AsyncClient(limits=limits, timeout=timeout)
+    yield
+    if http_client:
+        await http_client.aclose()
+
 app = FastAPI(
     title="RelayForge API Gateway",
     description="Production-grade fault-tolerant event processing engine REST gateway",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 app.add_middleware(
@@ -59,77 +74,77 @@ class IngestResponse(BaseModel):
     }
 )
 async def ingest_event(event_req: EventIngestRequest):
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        try:
-            resp = await client.post(f"{BACKEND_URL}/events", json=event_req.model_dump())
-            return JSONResponse(status_code=resp.status_code, content=resp.json())
-        except httpx.ConnectError:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="RelayForge C++ core engine is unavailable or not running"
-            )
+    assert http_client is not None
+    try:
+        resp = await http_client.post(f"{BACKEND_URL}/events", json=event_req.model_dump())
+        return JSONResponse(status_code=resp.status_code, content=resp.json())
+    except httpx.HTTPError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="RelayForge C++ core engine is unavailable or not running"
+        )
 
 @app.get("/api/v1/events/{event_id}", summary="Get event details and audit trail")
 async def get_event(event_id: str):
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        try:
-            resp = await client.get(f"{BACKEND_URL}/events/{event_id}")
-            if resp.status_code == 404:
-                raise HTTPException(status_code=404, detail="Event not found")
-            return resp.json()
-        except httpx.ConnectError:
-            raise HTTPException(status_code=503, detail="RelayForge C++ core engine unavailable")
+    assert http_client is not None
+    try:
+        resp = await http_client.get(f"{BACKEND_URL}/events/{event_id}")
+        if resp.status_code == 404:
+            raise HTTPException(status_code=404, detail="Event not found")
+        return resp.json()
+    except httpx.HTTPError:
+        raise HTTPException(status_code=503, detail="RelayForge C++ core engine unavailable")
 
 @app.get("/api/v1/dlq", summary="List dead letter queue events")
 async def get_dlq(limit: int = Query(50, ge=1, le=1000), offset: int = Query(0, ge=0)):
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        try:
-            resp = await client.get(f"{BACKEND_URL}/dlq", params={"limit": limit, "offset": offset})
-            return resp.json()
-        except httpx.ConnectError:
-            raise HTTPException(status_code=503, detail="RelayForge C++ core engine unavailable")
+    assert http_client is not None
+    try:
+        resp = await http_client.get(f"{BACKEND_URL}/dlq", params={"limit": limit, "offset": offset})
+        return resp.json()
+    except httpx.HTTPError:
+        raise HTTPException(status_code=503, detail="RelayForge C++ core engine unavailable")
 
 @app.post("/api/v1/dlq/{event_id}/replay", summary="Replay a dead letter event")
 async def replay_dlq(event_id: str):
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        try:
-            resp = await client.post(f"{BACKEND_URL}/dlq/{event_id}/replay")
-            if resp.status_code == 404:
-                raise HTTPException(status_code=404, detail="Event not found in DLQ")
-            return resp.json()
-        except httpx.ConnectError:
-            raise HTTPException(status_code=503, detail="RelayForge C++ core engine unavailable")
+    assert http_client is not None
+    try:
+        resp = await http_client.post(f"{BACKEND_URL}/dlq/{event_id}/replay")
+        if resp.status_code == 404:
+            raise HTTPException(status_code=404, detail="Event not found in DLQ")
+        return resp.json()
+    except httpx.HTTPError:
+        raise HTTPException(status_code=503, detail="RelayForge C++ core engine unavailable")
 
 @app.get("/api/v1/metrics", response_class=PlainTextResponse, summary="Prometheus metrics")
 async def get_metrics():
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        try:
-            resp = await client.get(f"{BACKEND_URL}/metrics")
-            return PlainTextResponse(resp.text)
-        except httpx.ConnectError:
-            raise HTTPException(status_code=503, detail="RelayForge C++ core engine unavailable")
+    assert http_client is not None
+    try:
+        resp = await http_client.get(f"{BACKEND_URL}/metrics")
+        return PlainTextResponse(resp.text)
+    except httpx.HTTPError:
+        raise HTTPException(status_code=503, detail="RelayForge C++ core engine unavailable")
 
 @app.get("/api/v1/stats", summary="Runtime statistics (throughput, latencies, worker utilization)")
 async def get_stats():
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        try:
-            resp = await client.get(f"{BACKEND_URL}/stats")
-            return resp.json()
-        except httpx.ConnectError:
-            raise HTTPException(status_code=503, detail="RelayForge C++ core engine unavailable")
+    assert http_client is not None
+    try:
+        resp = await http_client.get(f"{BACKEND_URL}/stats")
+        return resp.json()
+    except httpx.HTTPError:
+        raise HTTPException(status_code=503, detail="RelayForge C++ core engine unavailable")
 
 @app.get("/health", summary="Health check probe")
 async def health():
     backend_status = "DOWN"
     backend_info = {}
-    try:
-        async with httpx.AsyncClient(timeout=3.0) as client:
-            resp = await client.get(f"{BACKEND_URL}/health")
+    if http_client:
+        try:
+            resp = await http_client.get(f"{BACKEND_URL}/health", timeout=2.0)
             if resp.status_code == 200:
                 backend_status = "UP"
                 backend_info = resp.json()
-    except Exception:
-        backend_status = "UNREACHABLE"
+        except Exception:
+            backend_status = "UNREACHABLE"
 
     return {
         "gateway": "UP",
