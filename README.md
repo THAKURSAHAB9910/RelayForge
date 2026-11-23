@@ -50,9 +50,93 @@ http://localhost:8080/dashboard
 http://localhost:8000/dashboard
 ```
 
+## 🚀 Local Development & Interface Preview (React + Vite)
+
+You can run and test the complete end-to-end application locally on your machine with zero cloud dependencies.
+
+### 🌟 Active Local Service Map:
+| Service | Local URL | Description |
+| :--- | :--- | :--- |
+| **React + Vite Frontend** | **`http://localhost:5173`** | Real-time interactive UI with charts, event feeds, and controls |
+| **FastAPI Gateway** | **`http://localhost:8000`** | Python REST API with request validation & connection pool |
+| **Interactive Swagger Docs**| **`http://localhost:8000/docs`** | Live OpenAPI testing documentation |
+| **RelayForge C++ Engine** | **`http://localhost:8080`** | Native C++20 engine with SQLite WAL persistence |
+| **Prometheus Exporter** | **`http://localhost:8080/metrics`** | Real-time Prometheus metrics exposition |
+
 ---
 
-## 1. Architecture Overview
+### Quick Start (Single Convenient Command)
+
+#### On Windows (PowerShell):
+```powershell
+.\start_local.ps1
+```
+*This starts the C++ WAL Engine on `:8080`, FastAPI Gateway on `:8000`, and Vite React on `:5173`, then automatically opens your browser at `http://localhost:5173`.*
+
+#### On Linux / WSL / macOS (Bash):
+```bash
+./start_local.sh
+```
+
+#### Via Docker Compose:
+```bash
+docker compose -f docker/docker-compose.yml up --build
+```
+
+---
+
+### Step-by-Step Manual Startup (3 Terminals)
+
+If you prefer running each tier manually in separate terminals:
+
+#### Terminal 1: C++ Core Engine
+```bash
+# Build engine if not compiled
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --target relayforge_server --parallel
+
+# Run engine
+./build/relayforge_server --port 8080 --db relayforge.db --workers 4
+```
+
+#### Terminal 2: FastAPI Gateway
+```bash
+# Install Python requirements
+pip install -r api/requirements.txt
+
+# Run FastAPI gateway
+export RELAYFORGE_BACKEND_URL="http://127.0.0.1:8080"
+python -m uvicorn api.fast_api_gateway:app --port 8000 --host 0.0.0.0
+```
+
+#### Terminal 3: React + Vite Frontend
+```bash
+cd frontend
+npm install
+npm run dev
+# Vite runs on http://localhost:5173 and automatically proxies /api to :8000 and /engine to :8080
+```
+
+---
+
+### Troubleshooting Common Errors
+
+1. **Port 8000 or 5173 Already in Use**:
+   - Find and terminate any stale processes:
+     - Windows PowerShell:
+       ```powershell
+       Get-NetTCPConnection -LocalPort 8000, 5173 | Select-Object OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
+       ```
+     - Linux/macOS:
+       ```bash
+       lsof -ti :8000,5173 | xargs kill -9
+       ```
+2. **C++ Server Fails with Database Lock**:
+   - Delete stale lock files: `rm -f relayforge.db-shm relayforge.db-wal`.
+3. **CORS / Network Refused**:
+   - The Vite development server automatically proxies API requests (`/api` -> `http://localhost:8000` and `/engine` -> `http://localhost:8080`), eliminating browser cross-origin blocks. Additionally, both the C++ server and FastAPI gateway include open CORS pre-routing headers (`*`).
+
+---
 
 ```mermaid
 flowchart TD
