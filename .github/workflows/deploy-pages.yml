@@ -1,4 +1,4 @@
-name: Deploy Live Dashboard to GitHub Pages
+name: Sync GitHub Pages
 
 on:
   push:
@@ -8,37 +8,23 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
-
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
 
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  sync-pages:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Prepare Dashboard Artifact
-        run: |
-          mkdir -p _site
-          cp -r dashboard/* _site/
-          cp index.html _site/
-
-      - name: Upload Artifact
-        uses: actions/upload-pages-artifact@v3
         with:
-          path: '_site'
+          fetch-depth: 0
 
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Sync Main to gh-pages
+        run: |
+          git checkout gh-pages
+          git merge main --no-edit -m "chore: sync gh-pages with main [skip ci]"
+          git push origin gh-pages
