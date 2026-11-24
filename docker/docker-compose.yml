@@ -1,8 +1,8 @@
 services:
-  relayforge:
+  cpp-engine:
     build:
       context: ..
-      dockerfile: docker/Dockerfile
+      dockerfile: docker/Dockerfile.cpp
     container_name: relayforge-core
     ports:
       - "8080:8080"
@@ -16,19 +16,41 @@ services:
       timeout: 3s
       retries: 3
 
+  java-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.java
+    container_name: relayforge-java-api
+    ports:
+      - "8000:8000"
+    environment:
+      - RELAYFORGE_ENGINE_URL=http://cpp-engine:8080
+      - PORT=8000
+    depends_on:
+      cpp-engine:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
   fastapi-gateway:
     build:
       context: ..
       dockerfile: docker/Dockerfile.api
     container_name: relayforge-gateway
     ports:
-      - "8000:8000"
+      - "8001:8000"
     environment:
-      - RELAYFORGE_BACKEND_URL=http://relayforge:8080
+      - RELAYFORGE_BACKEND_URL=http://cpp-engine:8080
       - PORT=8000
     depends_on:
-      relayforge:
+      cpp-engine:
         condition: service_healthy
+    profiles:
+      - legacy
     restart: unless-stopped
 
   frontend:
@@ -41,7 +63,8 @@ services:
     environment:
       - VITE_PORT=5173
     depends_on:
-      - fastapi-gateway
+      java-api:
+        condition: service_healthy
     restart: unless-stopped
 
   prometheus:
@@ -52,7 +75,8 @@ services:
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
     depends_on:
-      - relayforge
+      - cpp-engine
+      - java-api
     restart: unless-stopped
 
 volumes:

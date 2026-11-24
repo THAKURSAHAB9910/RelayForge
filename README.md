@@ -3,18 +3,32 @@
 [![Live Dashboard](https://img.shields.io/badge/Live%20Dashboard-GitHub%20Pages-22c55e?style=flat-square&logo=github)](https://thakursahab9910.github.io/RelayForge/)
 [![Deploy with Vercel](https://img.shields.io/badge/Deploy%20with-Vercel-000000?style=flat-square&logo=vercel)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FTHAKURSAHAB9910%2FRelayForge)
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg?style=flat-square)](https://en.cppreference.com/w/cpp/20)
-[![CMake](https://img.shields.io/badge/CMake-3.20%2B-brightgreen.svg?style=flat-square)](https://cmake.org)
+[![Java 21](https://img.shields.io/badge/Java-21-orange.svg?style=flat-square)](https://openjdk.org/projects/jdk/21/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3.0-6db33f.svg?style=flat-square)](https://spring.io/projects/spring-boot)
+[![Protobuf](https://img.shields.io/badge/Protobuf-v3-4285F4.svg?style=flat-square)](https://protobuf.dev/)
 [![Storage](https://img.shields.io/badge/Storage-SQLite%20WAL-orange.svg?style=flat-square)](https://sqlite.org/wal.html)
 [![Metrics](https://img.shields.io/badge/Observability-Prometheus-red.svg?style=flat-square)](https://prometheus.io)
 [![License](https://img.shields.io/badge/License-Apache%202.0-lightgrey.svg?style=flat-square)](LICENSE)
 
-**RelayForge** is an industrial-grade, fault-tolerant event processing engine engineered in modern **C++20**. It is built from the ground up to solve the core reliability failure modes that plague modern microservices and high-throughput background systems:
+**RelayForge** is an industrial-grade, fault-tolerant event processing engine with a **hybrid C++20 Core and Java 21 Spring Boot architecture**. It is built from the ground up to address real-world distributed systems reliability challenges:
 
 1. **Duplicate Request Storms**: Mitigated by atomic transactional idempotency keys.
 2. **Worker Failures & Uncaught Exceptions**: Contained by an isolated worker thread shield preventing uncaught exceptions from destabilizing the engine.
 3. **Host & Application Crashes**: Prevented from causing event loss by persisting state to **SQLite Write-Ahead Logging (WAL)** prior to network acknowledgment.
 4. **Traffic Surges & Upstream Saturation**: Controlled via Token Bucket rate limiting and bounded priority queue backpressure.
 5. **Thundering Herd Retries**: Prevented using Exponential Backoff with randomized **Full Jitter**.
+6. **Enterprise API & Ingestion Layer**: Backed by a high-throughput **Java 21 Spring Boot 3** REST gateway with Jakarta validation, Swagger UI documentation, Apache HttpClient 5 connection pooling, and standardized RFC 7807 problem details.
+
+---
+
+## 🏛️ Hybrid Polyglot Architecture
+
+RelayForge separates operational concerns cleanly between an ultra-low latency execution core and an enterprise-facing API gateway:
+
+- **Processing Core (`cpp-engine/`)**: Written in modern **C++20** with native SQLite WAL persistence, thread-safe priority scheduling (`CRITICAL > HIGH > NORMAL > LOW`), Full Jitter exponential retries, and instant crash recovery ($< 2\text{ ms}$). C++ remains the **single source of truth** for all event transitions and persistence.
+- **Application Gateway (`java-api/`)**: Written in **Java 21 + Spring Boot 3.3.0**, providing declarative validation (`@Valid`), OpenAPI 3.0 / Swagger UI documentation, pooled connection management (Apache HttpClient 5), Dead Letter Queue replay endpoints, and centralized exception handling.
+- **Contracts (`proto/relayforge.proto`)**: Explicit request and response schemas defined in Protocol Buffers.
+- **Detailed Design Document**: See [docs/hybrid_architecture.md](file:///C:/Users/Vishe/Downloads/FORGE/docs/hybrid_architecture.md) for full architectural explanations, sequence diagrams, failure recovery matrices, and design decisions.
 
 ---
 
@@ -42,15 +56,9 @@ RelayForge features a real-time, responsive monitoring and simulation dashboard 
 - **Dead Letter Queue (DLQ) Manager**: Inspect quarantined poison pills, view stack traces and failure reasons, and perform **1-click administrative replay**.
 - **Prometheus Exporter**: Live preview of the raw `/metrics` Prometheus exposition text format.
 
-```bash
-# Access locally when running native C++ server:
-http://localhost:8080/dashboard
+---
 
-# Or when running FastAPI gateway:
-http://localhost:8000/dashboard
-```
-
-## 🚀 Local Development & Interface Preview (React + Vite)
+## 🚀 Local Development & Interface Preview
 
 You can run and test the complete end-to-end application locally on your machine with zero cloud dependencies.
 
@@ -58,8 +66,9 @@ You can run and test the complete end-to-end application locally on your machine
 | Service | Local URL | Description |
 | :--- | :--- | :--- |
 | **React + Vite Frontend** | **`http://localhost:5173`** | Real-time interactive UI with charts, event feeds, and controls |
-| **FastAPI Gateway** | **`http://localhost:8000`** | Python REST API with request validation & connection pool |
-| **Interactive Swagger Docs**| **`http://localhost:8000/docs`** | Live OpenAPI testing documentation |
+| **Java Spring Boot Gateway** | **`http://localhost:8000`** | Java 21 REST API with validation, connection pool & DLQ replay |
+| **Interactive Swagger Docs**| **`http://localhost:8000/swagger-ui.html`** | Live interactive OpenAPI 3.0 testing documentation |
+| **OpenAPI Specification** | **`http://localhost:8000/v3/api-docs`** | Raw OpenAPI JSON contract schema |
 | **RelayForge C++ Engine** | **`http://localhost:8080`** | Native C++20 engine with SQLite WAL persistence |
 | **Prometheus Exporter** | **`http://localhost:8080/metrics`** | Real-time Prometheus metrics exposition |
 
@@ -71,10 +80,11 @@ You can run and test the complete end-to-end application locally on your machine
 ```powershell
 .\start_local.ps1
 ```
-*This starts the C++ WAL Engine on `:8080`, FastAPI Gateway on `:8000`, and Vite React on `:5173`, then automatically opens your browser at `http://localhost:5173`.*
+*This starts the C++ WAL Engine on `:8080`, Java Spring Boot Gateway on `:8000`, and Vite React on `:5173`, then automatically opens your browser at `http://localhost:5173`.*
 
 #### On Linux / WSL / macOS (Bash):
 ```bash
+chmod +x start_local.sh
 ./start_local.sh
 ```
 
@@ -91,22 +101,20 @@ If you prefer running each tier manually in separate terminals:
 
 #### Terminal 1: C++ Core Engine
 ```bash
-# Build engine if not compiled
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --target relayforge_server --parallel
+# Build engine
+cmake -B cpp-engine/build -S cpp-engine -DCMAKE_BUILD_TYPE=Release
+cmake --build cpp-engine/build --target relayforge_server --parallel
 
 # Run engine
-./build/relayforge_server --port 8080 --db relayforge.db --workers 4
+./cpp-engine/build/relayforge_server --port 8080 --db relayforge.db --workers 4
 ```
 
-#### Terminal 2: FastAPI Gateway
+#### Terminal 2: Java Spring Boot REST Gateway
 ```bash
-# Install Python requirements
-pip install -r api/requirements.txt
-
-# Run FastAPI gateway
-export RELAYFORGE_BACKEND_URL="http://127.0.0.1:8080"
-python -m uvicorn api.fast_api_gateway:app --port 8000 --host 0.0.0.0
+cd java-api
+mvn clean package -DskipTests
+java -jar target/relayforge-java-api-1.0.0.jar
+# Serves on http://localhost:8000 with Swagger UI at http://localhost:8000/swagger-ui.html
 ```
 
 #### Terminal 3: React + Vite Frontend
@@ -414,3 +422,70 @@ This automated script:
 2. Violently terminates the process using `kill -9` (`SIGKILL`) while dozens of events are active in `IN_FLIGHT`.
 3. Reboots the engine on the same SQLite WAL database.
 4. Verifies that `RecoveryManager` immediately rescues the orphaned events and workers complete all 300 events to `COMPLETED` with **zero data loss**.
+
+---
+
+## 9. Project Structure
+
+```
+RelayForge/
+├── cpp-engine/              # C++20 Event Processing Engine Core
+│   ├── include/             # C++ Headers (Storage, Scheduler, WorkerPool, etc.)
+│   ├── src/                 # Engine implementations & server_main.cpp
+│   ├── tests/               # GoogleTest suite (5/5 passing, 100%)
+│   ├── benchmarks/          # Latency & throughput benchmark drivers
+│   └── CMakeLists.txt       # C++20 CMake build configuration
+├── java-api/                # Java 21 + Spring Boot 3.3.0 REST Gateway
+│   ├── src/main/java/       # Controllers, Services, Clients, DTOs, Handlers
+│   ├── src/test/java/       # JUnit 5 & WebMvcTest suite (21/21 passing, 100%)
+│   └── pom.xml              # Maven dependencies & plugins
+├── proto/                   # Inter-service protocol contracts
+│   └── relayforge.proto     # Protocol Buffers v3 contract schemas
+├── tests/                   # Integration and failure tests
+├── docker/                  # Multi-service container configurations
+│   ├── Dockerfile.cpp       # Multi-stage C++ engine container
+│   ├── Dockerfile.java      # Multi-stage Java 21 Spring Boot container
+│   ├── Dockerfile.frontend  # Node 20 Vite UI container
+│   ├── docker-compose.yml   # Multi-service orchestration
+│   └── prometheus.yml       # Prometheus scrape targets
+├── docs/                    # Technical architecture & design docs
+│   ├── hybrid_architecture.md # In-depth hybrid C++/Java design specification
+│   ├── architecture.md      # Engine modular architecture
+│   ├── event_lifecycle.md   # Event state transitions
+│   └── technical_decisions.md # Design trade-offs
+├── frontend/                # React + Vite Interactive Dashboard
+├── start_local.ps1          # Unified local startup script (PowerShell)
+└── start_local.sh           # Unified local startup script (Bash)
+```
+
+---
+
+## 10. Automated Testing Suites
+
+### C++ Engine Core Test Suite (GoogleTest)
+Run all C++ engine unit and integration tests:
+```bash
+cd cpp-engine/build && ctest --output-on-failure
+# Result: 5/5 test suites passed (100%)
+```
+Covering:
+- Storage & WAL transactions (`test_storage`)
+- Lock-free priority scheduler & aging (`test_scheduler`)
+- Worker pool thread safety & exception containment (`test_worker_pool`)
+- Crash recovery & in-flight rescue (`test_crash_recovery`)
+- Full engine end-to-end processing (`test_full_engine`)
+
+### Java Spring Boot Test Suite (JUnit 5 + Spring Boot Test)
+Run all Java API controller and client tests:
+```bash
+cd java-api && mvn test
+# Result: 21/21 tests passed (100%)
+```
+Covering:
+- Event ingestion with 202 Accepted & duplicate 200 OK (`EventControllerTest`)
+- Jakarta validation failures returning 400 with RFC 7807 ProblemDetail
+- Querying events and 404 Not Found handling
+- DLQ listing and 1-click replay (`DLQControllerTest`)
+- System statistics, Prometheus scrape target, and hybrid health diagnostics (`MonitoringControllerTest`)
+- Engine connection timeouts (504), connection refused (503), and backpressure 429 (`RelayForgeEngineHttpClientTest`)
+- Clean Spring context bootstrapping (`RelayForgeApplicationTests`)

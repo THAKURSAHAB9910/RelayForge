@@ -1,0 +1,142 @@
+syntax = "proto3";
+
+package relayforge;
+
+option java_multiple_files = true;
+option java_package = "com.relayforge.proto";
+option java_outer_classname = "RelayForgeProto";
+
+// Event scheduling and execution priority
+enum EventPriorityProto {
+  PRIORITY_UNSPECIFIED = 0;
+  CRITICAL = 1;
+  HIGH = 2;
+  NORMAL = 3;
+  LOW = 4;
+}
+
+// Durable lifecycle status of an event
+enum EventStatusProto {
+  STATUS_UNSPECIFIED = 0;
+  PENDING = 1;
+  IN_FLIGHT = 2;
+  COMPLETED = 3;
+  RETRY_SCHEDULED = 4;
+  DEAD_LETTER = 5;
+}
+
+// Configurable Exponential Backoff Retry Policy
+message RetryPolicyProto {
+  int32 max_retries = 1;
+  int32 initial_backoff_ms = 2;
+  int32 max_backoff_ms = 3;
+  double backoff_multiplier = 4;
+}
+
+// Full Event entity persisted in SQLite WAL
+message EventProto {
+  string id = 1;
+  string idempotency_key = 2;
+  string event_type = 3;
+  EventPriorityProto priority = 4;
+  string payload = 5;
+  EventStatusProto status = 6;
+  int32 attempt_count = 7;
+  int32 max_retries = 8;
+  int64 created_at_epoch_ms = 9;
+  int64 scheduled_at_epoch_ms = 10;
+  int64 completed_at_epoch_ms = 11;
+  string last_error = 12;
+  string execution_result = 13;
+}
+
+// Submit Event
+message SubmitEventRequest {
+  string event_type = 1;
+  string idempotency_key = 2;
+  EventPriorityProto priority = 3;
+  string payload = 4;
+  int32 max_retries = 5;
+  RetryPolicyProto retry_policy = 6;
+}
+
+message SubmitEventResponse {
+  int32 status_code = 1; // 202 Accepted, 200 Deduplicated, 400 Bad Request, 429 Overloaded
+  string event_id = 2;
+  string message = 3;
+  bool is_duplicate = 4;
+  EventProto event = 5;
+}
+
+// Query Event by ID
+message GetEventRequest {
+  string event_id = 1;
+}
+
+message GetEventResponse {
+  bool found = 1;
+  EventProto event = 2;
+  string message = 3;
+}
+
+// Dead Letter Queue Query
+message GetDLQRequest {
+  int32 limit = 1;
+  int32 offset = 2;
+}
+
+message GetDLQResponse {
+  repeated EventProto events = 1;
+  int32 total_count = 2;
+}
+
+// Dead Letter Queue Replay
+message ReplayDLQRequest {
+  string event_id = 1;
+}
+
+message ReplayDLQResponse {
+  bool success = 1;
+  string event_id = 2;
+  string message = 3;
+}
+
+// Telemetry & Runtime Statistics
+message GetStatsRequest {}
+
+message GetStatsResponse {
+  int64 events_received_total = 1;
+  int64 events_success_total = 2;
+  int64 events_failed_total = 3;
+  int64 events_retried_total = 4;
+  int64 events_dlq_total = 5;
+  int64 in_flight_count = 6;
+  int64 queue_depth = 7;
+  int64 backpressure_drops_total = 8;
+  double throughput_eps = 9;
+  double latency_p50_ms = 10;
+  double latency_p95_ms = 11;
+  double latency_p99_ms = 12;
+  double worker_utilization = 13;
+}
+
+// Health Check Probe
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  string status = 1; // "UP", "DEGRADED", "DOWN"
+  bool engine_running = 2;
+  int32 workers_active = 3;
+  int64 queue_depth = 4;
+  string db_mode = 5; // "WAL"
+}
+
+// Core Engine Remote Service Interface
+service RelayForgeEngineService {
+  rpc SubmitEvent(SubmitEventRequest) returns (SubmitEventResponse);
+  rpc GetEvent(GetEventRequest) returns (GetEventResponse);
+  rpc ReplayDLQ(ReplayDLQRequest) returns (ReplayDLQResponse);
+  rpc GetDLQ(GetDLQRequest) returns (GetDLQResponse);
+  rpc GetStats(GetStatsRequest) returns (GetStatsResponse);
+  rpc CheckHealth(HealthCheckRequest) returns (HealthCheckResponse);
+}

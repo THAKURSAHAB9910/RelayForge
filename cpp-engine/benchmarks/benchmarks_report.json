@@ -1,0 +1,165 @@
+{
+  "benchmark_runs": [
+    {
+      "cpu_sys_sec": 0.095442,
+      "cpu_user_sec": 0.104377,
+      "duration_sec": 0.400410647,
+      "event_volume": 1000,
+      "p50_ms": 0.047396,
+      "p95_ms": 0.125662,
+      "p99_ms": 0.547297,
+      "peak_memory_mb": 6.25,
+      "throughput_eps": 2497.4360884065104,
+      "workers": 1
+    },
+    {
+      "cpu_sys_sec": 0.11095799999999999,
+      "cpu_user_sec": 0.10543399999999999,
+      "duration_sec": 0.375918554,
+      "event_volume": 1000,
+      "p50_ms": 0.059103,
+      "p95_ms": 0.122741,
+      "p99_ms": 6.378527,
+      "peak_memory_mb": 6.3828125,
+      "throughput_eps": 2660.1506878535183,
+      "workers": 2
+    },
+    {
+      "cpu_sys_sec": 0.11774200000000001,
+      "cpu_user_sec": 0.12139499999999998,
+      "duration_sec": 0.381233399,
+      "event_volume": 1000,
+      "p50_ms": 0.060445,
+      "p95_ms": 0.802285,
+      "p99_ms": 7.698098,
+      "peak_memory_mb": 6.5078125,
+      "throughput_eps": 2623.0650373840936,
+      "workers": 4
+    },
+    {
+      "cpu_sys_sec": 0.141223,
+      "cpu_user_sec": 0.14478800000000003,
+      "duration_sec": 0.42159695,
+      "event_volume": 1000,
+      "p50_ms": 0.239486,
+      "p95_ms": 2.292774,
+      "p99_ms": 10.766592,
+      "peak_memory_mb": 6.7578125,
+      "throughput_eps": 2371.933667926203,
+      "workers": 8
+    },
+    {
+      "cpu_sys_sec": 1.007239,
+      "cpu_user_sec": 1.223437,
+      "duration_sec": 4.102897802,
+      "event_volume": 10000,
+      "p50_ms": 0.046836,
+      "p95_ms": 0.148376,
+      "p99_ms": 2.026772,
+      "peak_memory_mb": 10.7109375,
+      "throughput_eps": 2437.3017517339563,
+      "workers": 1
+    },
+    {
+      "cpu_sys_sec": 1.3305820000000002,
+      "cpu_user_sec": 1.635907,
+      "duration_sec": 4.503278785,
+      "event_volume": 10000,
+      "p50_ms": 0.060711,
+      "p95_ms": 0.217802,
+      "p99_ms": 5.785214,
+      "peak_memory_mb": 11.3046875,
+      "throughput_eps": 2220.6042480223664,
+      "workers": 2
+    },
+    {
+      "cpu_sys_sec": 1.1583099999999997,
+      "cpu_user_sec": 1.4855049999999999,
+      "duration_sec": 3.965211908,
+      "event_volume": 10000,
+      "p50_ms": 0.061883,
+      "p95_ms": 0.644715,
+      "p99_ms": 8.991071,
+      "peak_memory_mb": 11.5546875,
+      "throughput_eps": 2521.9333120190963,
+      "workers": 4
+    },
+    {
+      "cpu_sys_sec": 1.288488,
+      "cpu_user_sec": 1.4181629999999998,
+      "duration_sec": 3.919777387,
+      "event_volume": 10000,
+      "p50_ms": 0.223529,
+      "p95_ms": 3.722917,
+      "p99_ms": 11.610946,
+      "peak_memory_mb": 11.6796875,
+      "throughput_eps": 2551.1652863668096,
+      "workers": 8
+    },
+    {
+      "cpu_sys_sec": 9.40949,
+      "cpu_user_sec": 12.042750999999999,
+      "duration_sec": 38.872779119,
+      "event_volume": 100000,
+      "p50_ms": 0.046028,
+      "p95_ms": 0.119441,
+      "p99_ms": 1.361023,
+      "peak_memory_mb": 45.4609375,
+      "throughput_eps": 2572.494230316623,
+      "workers": 1
+    },
+    {
+      "cpu_sys_sec": 11.441469999999999,
+      "cpu_user_sec": 14.039752,
+      "duration_sec": 41.411357967,
+      "event_volume": 100000,
+      "p50_ms": 0.059702,
+      "p95_ms": 0.172626,
+      "p99_ms": 5.658184,
+      "peak_memory_mb": 45.4609375,
+      "throughput_eps": 2414.796444967786,
+      "workers": 2
+    },
+    {
+      "cpu_sys_sec": 12.097238,
+      "cpu_user_sec": 14.412728999999999,
+      "duration_sec": 40.21633301,
+      "event_volume": 100000,
+      "p50_ms": 0.064579,
+      "p95_ms": 0.912852,
+      "p99_ms": 8.741628,
+      "peak_memory_mb": 45.4609375,
+      "throughput_eps": 2486.551918473882,
+      "workers": 4
+    },
+    {
+      "cpu_sys_sec": 15.900193000000002,
+      "cpu_user_sec": 18.964625999999996,
+      "duration_sec": 58.677815359,
+      "event_volume": 100000,
+      "p50_ms": 0.235706,
+      "p95_ms": 5.296544,
+      "p99_ms": 21.105763,
+      "peak_memory_mb": 45.4609375,
+      "throughput_eps": 1704.2215935986105,
+      "workers": 8
+    }
+  ],
+  "crash_recovery": [
+    {
+      "recovery_rate_eps": 10952.114518726468,
+      "recovery_time_ms": 91.306569,
+      "volume": 1000
+    },
+    {
+      "recovery_rate_eps": 12631.408920626616,
+      "recovery_time_ms": 791.677323,
+      "volume": 10000
+    },
+    {
+      "recovery_rate_eps": 15592.080071034123,
+      "recovery_time_ms": 3206.756236,
+      "volume": 50000
+    }
+  ]
+}
